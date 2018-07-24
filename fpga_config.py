@@ -1,7 +1,7 @@
 import xml.etree.ElementTree as ET
 
 
-class config(object):
+class Config(object):
     """
     DMA FIFO info pulled from an .fpgaconfig file
     config_file is the file name of the XML that defines this FIFO
@@ -47,7 +47,7 @@ class config(object):
         return this_packet
 
 
-class packet(object):
+class Packet(object):
     def __init__(self, config, direction, index=1):
         """
         Generate an object that defines a packet in a DMA FIFO
