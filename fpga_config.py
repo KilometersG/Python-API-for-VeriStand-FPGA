@@ -1,6 +1,34 @@
 import xml.etree.ElementTree as ET
 
 
+class VeriStandError(Exception):
+    """
+    Base class for exceptions in this API
+    """
+    pass
+
+class ConfigError(VeriStandError):
+    """
+    Exception raised for errors in the .fpgaconfig file
+
+    Attributes
+        message = explanation of error.
+    """
+    def __init__(self, message):
+        self.message = message
+
+class PacketError(VeriStandError):
+    """
+    Exception raised for errors in a packet
+
+    Attributes
+        Message -- explanation of error
+        packetID -- packet number and direction that the error occurred in.
+    """
+    def __init__(self, message, packetID):
+        self.message = message
+        self.packetID = packetID
+
 class Config(object):
     """
     DMA FIFO info pulled from an .fpgaconfig file
@@ -32,9 +60,9 @@ class Config(object):
             else:
                 continue
         if self.read_packets == -1:
-            raise BaseException('No DMA_Read tag present')
+            raise ConfigError(message='No DMA_Read tag present')
         elif self.write_packets == -1:
-            raise BaseException('No DMA_Write tag present')
+            raise ConfigError(message='No DMA_Write tag present')
 
     def create_packet(self, direction, index):
         """
@@ -43,7 +71,7 @@ class Config(object):
         :param index:
         :return:
         """
-        this_packet = packet(self, direction, index)
+        this_packet = Packet(self, direction, index)
         return this_packet
 
 
@@ -100,7 +128,7 @@ class Packet(object):
                            char = 1
                        else:
                             char = 0
-                    powof = int(self.definition['FXPIWL{}'.format(i)]) - 1 - i
+                    powof = int(self.definition['FXPIWL{}'.format(i)]) - 1 - index
                     bitval = int(char) * 2 ** powof
                     chnlunpck = chnlunpck + bitval
                 real_values['{}'.format(self.definition['name{}'.format(i)])] = chnlunpck
