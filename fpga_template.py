@@ -3,7 +3,7 @@ from nifpga import Session
 import ntpath
 
 configpath = input('Please enter the full filepath of your .fpgaconfig file: ')
-vsfpga = fpga_config.config(configpath)
+vsfpga = fpga_config.Config(configpath)
 folder = ntpath.split(configpath)
 full_bitpath = folder[0] + '\\{}'.format(vsfpga.bitfile)
 read_count = vsfpga.read_packets + 1
