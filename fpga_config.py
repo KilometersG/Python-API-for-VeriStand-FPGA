@@ -1,5 +1,6 @@
 import xml.etree.ElementTree as ET
-
+from nifpga import Session
+import ntpath
 
 class VeriStandError(Exception):
     """
@@ -29,7 +30,8 @@ class PacketError(VeriStandError):
         self.message = message
         self.packetID = packetID
 
-class Config(object):
+
+class VeriStandFPGA(object):
     """
     DMA FIFO info pulled from an .fpgaconfig file
     config_file is the file name of the XML that defines this FIFO
@@ -48,21 +50,74 @@ class Config(object):
         self.root = self.tree.getroot()
         self.read_packets = -1
         self.write_packets = -1
+        self.session = False
+        self.write_fifo = False
+        self.read_fifo = False
         for child in self.root:
             if child.tag == 'DMA_Read':
                 self.read_packets = int(child[0].text)
-                self.read_fifo = child
+                self.read_fifo_tag = child
             elif child.tag == 'DMA_Write':
                 self.write_packets = int(child[0].text)
-                self.write_fifo = child
+                self.write_fifo_tag = child
             elif child.tag == 'Bitfile':
                 self.bitfile = child.text
             else:
                 continue
+        self.folder = ntpath.split(self.filepath)
+        self.full_bitpath = self.folder[0] + '\\{}'.format(self.bitfile)
         if self.read_packets == -1:
             raise ConfigError(message='No DMA_Read tag present')
         elif self.write_packets == -1:
             raise ConfigError(message='No DMA_Write tag present')
+        self.read_packet_list = {}
+        self.write_packet_list = {}
+        self.channel_value_table = {}
+        for i in range(1, self.read_packets + 1):
+            self.read_packet_list['packet{}'.format(i)] = self.create_packet('read', i)
+            for j in range(self.read_packet_list['packet{}'.format(i)].definition['channel_count']):
+                self.channel_value_table[self.read_packet_list['packet{}'.format(i)].definition['name{}'.format(j)]] = 0
+        for i in range(1, self.write_packets + 1):
+            self.write_packet_list['packet{}'.format(i)] = self.create_packet('write', i)
+            for j in range(self.write_packet_list['packet{}'.format(i)].definition['channel_count']):
+                self.channel_value_table[self.write_packet_list['packet{}'.format(i)].definition['name{}'.format(j)]] = 0
+
+    def init_fpga(self, device):
+        self.session = Session(self.full_bitpath, device)
+        self.write_fifo = self.session.fifos['DMA_WRITE']
+        self.read_fifo = self.session.fifos['DMA_READ']
+
+
+    def set_channel(self, channel_name, value):
+        self.channel_value_table[channel_name] = value
+
+    def get_channel(self, channel_name):
+        return self.channel_value_table[channel_name]
+
+    def vs_read_fifo(self, session, timeout):
+        if self.read_fifo == False:
+            raise ConfigError('Session not initialized. Please first call the VeriStandFPGA.init fpga method before reading')
+        else:
+            read_tup = self.read_fifo.read(number_of_elements=self.read_packets, timeout=timeout)
+            data = read_tup[0]
+            for i, u64 in enumerate(data):
+                poi = self.read_packet_list['packet{}'.format(i+1)]
+                read_vals = poi.unpack(u64)
+                for key in read_vals:
+                    self.channel_value_table[key] = read_vals[key]
+
+    def vs_write_fifo(self, timeout):
+        if self.write_fifo == False:
+            raise ConfigError('Session not initialized. Please first call the VeriStandFPGA.init_fpga method before writing')
+        else:
+            write_list = []
+            for i in range(1, self.write_packets + 1):
+                poi = self.write_packet_list['packet{}'.format(i)]
+                packet_vals = []
+                for j in range(poi.definition['channel_count']):
+                    packet_vals.append(self.channel_value_table[poi.definition['name{}'.format(j)]])
+                write_list.append(poi.pack(packet_vals))
+            self.write_fifo.write(data=write_list, timeout=timeout)
 
     def create_packet(self, direction, index):
         """
@@ -92,9 +147,9 @@ class Packet(object):
         self.direction = direction
         self.index = index
         if self.direction.lower() == 'read':
-            fifo = config.read_fifo
+            fifo = config.read_fifo_tag
         elif self.direction.lower() == 'write':
-            fifo = config.write_fifo
+            fifo = config.write_fifo_tag
         else:
             raise BaseException('direction must be either read or write')
 
