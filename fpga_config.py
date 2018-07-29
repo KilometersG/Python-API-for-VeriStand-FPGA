@@ -82,11 +82,23 @@ class VeriStandFPGA(object):
             for j in range(self.write_packet_list['packet{}'.format(i)].definition['channel_count']):
                 self.channel_value_table[self.write_packet_list['packet{}'.format(i)].definition['name{}'.format(j)]] = 0
 
-    def init_fpga(self, device):
+    def init_fpga(self, device, loop_rate):
         self.session = Session(self.full_bitpath, device)
         self.write_fifo = self.session.fifos['DMA_WRITE']
         self.read_fifo = self.session.fifos['DMA_READ']
+        self.loop_timer = self.session.registers['Loop Rate (usec)']
+        self.fpga_start = self.session.registers['Start']
+        self.fpga_rtsi = self.session.registers['Write to  RTSI']
+        self.fpga_ex_timing = self.session.registers['Use External Timing']
+        self.fpga_irq = self.session.registers['Generate IRQ']
 
+        self.loop_timer.write(loop_rate)
+        self.fpga_rtsi.write(False)
+        self.fpga_ex_timing.write(False)
+        self.fpga_irq.write(False)
+
+    def start_fpga(self):
+        self.fpga_start.write(True)
 
     def set_channel(self, channel_name, value):
         self.channel_value_table[channel_name] = value
@@ -94,7 +106,7 @@ class VeriStandFPGA(object):
     def get_channel(self, channel_name):
         return self.channel_value_table[channel_name]
 
-    def vs_read_fifo(self, session, timeout):
+    def vs_read_fifo(self, timeout):
         if self.read_fifo == False:
             raise ConfigError('Session not initialized. Please first call the VeriStandFPGA.init fpga method before reading')
         else:
