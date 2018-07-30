@@ -12,17 +12,17 @@ iteration_writes = {}
 for i in range(1, write_count):
     poi = vsfpga.write_packet_list['packet{}'.format(i)]
     for j in range(poi.definition['channel_count']):
-        valuestr = input('{}'.format(poi.definition['name{}'.format(j)]))
+        valuestr = input('{}: '.format(poi.definition['name{}'.format(j)]))
         channel_values = valuestr.split(',')
         for k, value in enumerate(channel_values):
-            iteration_writes['{},{}'.format(poi.definition['name{}'.format(j)],k)] = value
+            iteration_writes['{},{}'.format(poi.definition['name{}'.format(j)],k)] = int(value)
 
 loop_rate = input("Please enter desired FPGA loop rate in ms: ")
 vsfpga.init_fpga(device, int(loop_rate))
-vsfpga.fpga_start()
+vsfpga.start_fpga()
 
 for i in range(5):
-    vsfpga.read_fifo(timeout=2000)
+    vsfpga.vs_read_fifo(timeout=2000)
     print('Iteration {} values are: '.format(i))
     for j in range(1, read_count):
         poi = vsfpga.read_packet_list['packet{}'.format(j)]
@@ -34,5 +34,4 @@ for i in range(5):
         for k in range(poi.definition['channel_count']):
             vsfpga.set_channel(channel_name=poi.definition['name{}'.format(k)],
                                value=iteration_writes['{},{}'.format(poi.definition['name{}'.format(k)], i)])
-    vsfpga.write_fifo(timeout=2000)
-
+    vsfpga.vs_write_fifo(timeout=2000)

@@ -51,8 +51,8 @@ class VeriStandFPGA(object):
         self.read_packets = -1
         self.write_packets = -1
         self.session = False
-        self.write_fifo = False
-        self.read_fifo = False
+        self.write_fifo_object = False
+        self.read_fifo_object = False
         for child in self.root:
             if child.tag == 'DMA_Read':
                 self.read_packets = int(child[0].text)
@@ -84,10 +84,10 @@ class VeriStandFPGA(object):
 
     def init_fpga(self, device, loop_rate):
         self.session = Session(self.full_bitpath, device)
-        self.write_fifo = self.session.fifos['DMA_WRITE']
-        self.read_fifo = self.session.fifos['DMA_READ']
+        self.write_fifo_object = self.session.fifos['DMA_WRITE']
+        self.read_fifo_object = self.session.fifos['DMA_READ']
         self.loop_timer = self.session.registers['Loop Rate (usec)']
-        self.fpga_start = self.session.registers['Start']
+        self.fpga_start_control = self.session.registers['Start']
         self.fpga_rtsi = self.session.registers['Write to  RTSI']
         self.fpga_ex_timing = self.session.registers['Use External Timing']
         self.fpga_irq = self.session.registers['Generate IRQ']
@@ -98,7 +98,7 @@ class VeriStandFPGA(object):
         self.fpga_irq.write(False)
 
     def start_fpga(self):
-        self.fpga_start.write(True)
+        self.fpga_start_control.write(True)
 
     def set_channel(self, channel_name, value):
         self.channel_value_table[channel_name] = value
@@ -107,10 +107,10 @@ class VeriStandFPGA(object):
         return self.channel_value_table[channel_name]
 
     def vs_read_fifo(self, timeout):
-        if self.read_fifo == False:
+        if self.read_fifo_object == False:
             raise ConfigError('Session not initialized. Please first call the VeriStandFPGA.init fpga method before reading')
         else:
-            read_tup = self.read_fifo.read(number_of_elements=self.read_packets, timeout=timeout)
+            read_tup = self.read_fifo_object.read(number_of_elements=self.read_packets, timeout_ms=timeout)
             data = read_tup[0]
             for i, u64 in enumerate(data):
                 poi = self.read_packet_list['packet{}'.format(i+1)]
@@ -119,7 +119,7 @@ class VeriStandFPGA(object):
                     self.channel_value_table[key] = read_vals[key]
 
     def vs_write_fifo(self, timeout):
-        if self.write_fifo == False:
+        if self.write_fifo_object == False:
             raise ConfigError('Session not initialized. Please first call the VeriStandFPGA.init_fpga method before writing')
         else:
             write_list = []
@@ -129,7 +129,7 @@ class VeriStandFPGA(object):
                 for j in range(poi.definition['channel_count']):
                     packet_vals.append(self.channel_value_table[poi.definition['name{}'.format(j)]])
                 write_list.append(poi.pack(packet_vals))
-            self.write_fifo.write(data=write_list, timeout=timeout)
+            self.write_fifo_object.write(data=write_list, timeout_ms=timeout)
 
     def create_packet(self, direction, index):
         """
