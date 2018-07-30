@@ -3,9 +3,8 @@ from nifpga import Session
 import ntpath
 
 configpath = input('Please enter the full filepath of your .fpgaconfig file: ')
-vsfpga = fpga_config.Config(configpath)
+vsfpga = fpga_config.VeriStandFPGA(configpath)
 folder = ntpath.split(configpath)
-full_bitpath = folder[0] + '\\{}'.format(vsfpga.bitfile)
 read_count = vsfpga.read_packets + 1
 write_count = vsfpga.write_packets + 1
 read_packets = {}
@@ -31,7 +30,7 @@ for i in range(1, write_count):
     write_values['packet{}'.format(i)] = iteration_writes
 
 device = input('Please input the name of your FPGA board as it appears in NI-MAX: ')
-with Session(full_bitpath, device) as sesh:
+with Session(vsfpga.full_bitpath, device) as sesh:
 
     read_fifo = sesh.fifos['DMA_READ']
     write_fifo = sesh.fifos['DMA_WRITE']
@@ -68,6 +67,8 @@ with Session(full_bitpath, device) as sesh:
         for j, u64 in enumerate(current_it):
             poi = read_packets['packet{}'.format(j+1)]
             print(poi.unpack(u64))
+
+    sesh.close()
 
 # Assumptions:
 #   Bitfile in the same folder as the .fpgaconfig file

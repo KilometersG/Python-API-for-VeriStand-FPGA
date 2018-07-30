@@ -100,6 +100,9 @@ class VeriStandFPGA(object):
     def start_fpga(self):
         self.fpga_start_control.write(True)
 
+    def stop_fpga(self):
+        self.session.close()
+
     def set_channel(self, channel_name, value):
         self.channel_value_table[channel_name] = value
 

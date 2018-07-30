@@ -35,3 +35,4 @@ for i in range(5):
             vsfpga.set_channel(channel_name=poi.definition['name{}'.format(k)],
                                value=iteration_writes['{},{}'.format(poi.definition['name{}'.format(k)], i)])
     vsfpga.vs_write_fifo(timeout=2000)
+vsfpga.stop_fpga()
