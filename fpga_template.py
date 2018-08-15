@@ -56,7 +56,7 @@ with Session(vsfpga.full_bitpath, device) as sesh:
             for k in range(poi.definition['channel_count']):
                 channel_name = poi.definition['name{}'.format(k)]
                 p_values.append(this_iteration['{},{}'.format(channel_name, i)])
-            packed_data = poi.pack(p_values)
+            packed_data = poi._pack(p_values)
             write_list.append(packed_data)
         write_fifo.write(data=write_list, timeout_ms=2000)
 
@@ -66,7 +66,7 @@ with Session(vsfpga.full_bitpath, device) as sesh:
         current_it = read_tup[0]
         for j, u64 in enumerate(current_it):
             poi = read_packets['packet{}'.format(j+1)]
-            print(poi.unpack(u64))
+            print(poi._unpack(u64))
 
     sesh.close()
 

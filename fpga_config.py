@@ -48,11 +48,11 @@ class VeriStandFPGA(object):
         self.filepath = filepath
         self.tree = ET.parse(self.filepath)
         self.root = self.tree.getroot()
-        self.read_packets = -1
-        self.write_packets = -1
-        self.session = False
-        self.write_fifo_object = False
-        self.read_fifo_object = False
+        self.read_packets = None
+        self.write_packets = None
+        self.session = None
+        self.write_fifo_object = None
+        self.read_fifo_object = None
         for child in self.root:
             if child.tag == 'DMA_Read':
                 self.read_packets = int(child[0].text)
@@ -66,19 +66,19 @@ class VeriStandFPGA(object):
                 continue
         self.folder = ntpath.split(self.filepath)
         self.full_bitpath = self.folder[0] + '\\{}'.format(self.bitfile)
-        if self.read_packets == -1:
+        if self.read_packets is None:
             raise ConfigError(message='No DMA_Read tag present')
-        elif self.write_packets == -1:
+        elif self.write_packets is None:
             raise ConfigError(message='No DMA_Write tag present')
         self.read_packet_list = {}
         self.write_packet_list = {}
         self.channel_value_table = {}
         for i in range(1, self.read_packets + 1):
-            self.read_packet_list['packet{}'.format(i)] = self.create_packet('read', i)
+            self.read_packet_list['packet{}'.format(i)] = self._create_packet('read', i)
             for j in range(self.read_packet_list['packet{}'.format(i)].definition['channel_count']):
                 self.channel_value_table[self.read_packet_list['packet{}'.format(i)].definition['name{}'.format(j)]] = 0
         for i in range(1, self.write_packets + 1):
-            self.write_packet_list['packet{}'.format(i)] = self.create_packet('write', i)
+            self.write_packet_list['packet{}'.format(i)] = self._create_packet('write', i)
             for j in range(self.write_packet_list['packet{}'.format(i)].definition['channel_count']):
                 self.channel_value_table[self.write_packet_list['packet{}'.format(i)].definition['name{}'.format(j)]] = 0
 
@@ -110,19 +110,19 @@ class VeriStandFPGA(object):
         return self.channel_value_table[channel_name]
 
     def vs_read_fifo(self, timeout):
-        if self.read_fifo_object == False:
+        if self.read_fifo_object is None:
             raise ConfigError('Session not initialized. Please first call the VeriStandFPGA.init fpga method before reading')
         else:
             read_tup = self.read_fifo_object.read(number_of_elements=self.read_packets, timeout_ms=timeout)
             data = read_tup[0]
             for i, u64 in enumerate(data):
                 poi = self.read_packet_list['packet{}'.format(i+1)]
-                read_vals = poi.unpack(u64)
+                read_vals = poi._unpack(u64)
                 for key in read_vals:
                     self.channel_value_table[key] = read_vals[key]
 
     def vs_write_fifo(self, timeout):
-        if self.write_fifo_object == False:
+        if self.write_fifo_object is None:
             raise ConfigError('Session not initialized. Please first call the VeriStandFPGA.init_fpga method before writing')
         else:
             write_list = []
@@ -131,10 +131,10 @@ class VeriStandFPGA(object):
                 packet_vals = []
                 for j in range(poi.definition['channel_count']):
                     packet_vals.append(self.channel_value_table[poi.definition['name{}'.format(j)]])
-                write_list.append(poi.pack(packet_vals))
+                write_list.append(poi._pack(packet_vals))
             self.write_fifo_object.write(data=write_list, timeout_ms=timeout)
 
-    def create_packet(self, direction, index):
+    def _create_packet(self, direction, index):
         """
 
         :param direction:
@@ -179,7 +179,7 @@ class Packet(object):
                 packet_def['FXPIWL{}'.format(i)] = packet[i][6].text
         self.definition = packet_def
 
-    def unpack(self, data):
+    def _unpack(self, data):
         """
 
         :param data: U64 value that comes out of the DMA_Read
@@ -215,7 +215,7 @@ class Packet(object):
 
         return real_values
 
-    def pack(self, real_values):
+    def _pack(self, real_values):
         """
 
         :param real_values: list of values to write to the channels in this packet

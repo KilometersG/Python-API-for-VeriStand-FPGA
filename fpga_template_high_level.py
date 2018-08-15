@@ -17,8 +17,15 @@ for i in range(1, write_count):
         for k, value in enumerate(channel_values):
             iteration_writes['{},{}'.format(poi.definition['name{}'.format(j)],k)] = int(value)
 
-loop_rate = input("Please enter desired FPGA loop rate in ms: ")
-vsfpga.init_fpga(device, int(loop_rate))
+while True
+    loop_rate = input("Please enter desired FPGA loop rate in ms: ")
+    try:
+        vsfpga.init_fpga(device, int(loop_rate))
+    except ValueError:
+        print('FPGA loop rate must be an integer')
+    else:
+        break
+
 vsfpga.start_fpga()
 
 for i in range(5):
