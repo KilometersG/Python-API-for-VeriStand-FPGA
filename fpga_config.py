@@ -62,25 +62,23 @@ class VeriStandFPGA(object):
                 self.write_fifo_tag = child
             elif child.tag == 'Bitfile':
                 self.bitfile = child.text
-            else:
-                continue
         self.folder = ntpath.split(self.filepath)
         self.full_bitpath = self.folder[0] + '\\{}'.format(self.bitfile)
         if self.read_packets is None:
             raise ConfigError(message='No DMA_Read tag present')
         elif self.write_packets is None:
             raise ConfigError(message='No DMA_Write tag present')
-        self.read_packet_list = {}
-        self.write_packet_list = {}
+        self.read_packet_list = []
+        self.write_packet_list = []
         self.channel_value_table = {}
-        for i in range(1, self.read_packets + 1):
-            self.read_packet_list['packet{}'.format(i)] = self._create_packet('read', i)
-            for j in range(self.read_packet_list['packet{}'.format(i)].definition['channel_count']):
-                self.channel_value_table[self.read_packet_list['packet{}'.format(i)].definition['name{}'.format(j)]] = 0
-        for i in range(1, self.write_packets + 1):
-            self.write_packet_list['packet{}'.format(i)] = self._create_packet('write', i)
-            for j in range(self.write_packet_list['packet{}'.format(i)].definition['channel_count']):
-                self.channel_value_table[self.write_packet_list['packet{}'.format(i)].definition['name{}'.format(j)]] = 0
+        for i in range(self.read_packets):
+            self.read_packet_list.append(self._create_packet('read', i))
+            for j in range(self.read_packet_list[i].definition['channel_count']):
+                self.channel_value_table[self.read_packet_list[i].definition['name{}'.format(j)]] = 0
+        for i in range(self.write_packets):
+            self.write_packet_list.append(self._create_packet('write', i))
+            for j in range(self.write_packet_list[i].definition['channel_count']):
+                self.channel_value_table[self.write_packet_list[i].definition['name{}'.format(j)]] = 0
 
     def init_fpga(self, device, loop_rate):
         self.session = Session(self.full_bitpath, device)
@@ -111,13 +109,14 @@ class VeriStandFPGA(object):
 
     def vs_read_fifo(self, timeout):
         if self.read_fifo_object is None:
-            raise ConfigError('Session not initialized. Please first call the VeriStandFPGA.init fpga method before reading')
+            raise ConfigError('Session not initialized. Please first call the'
+                              ' VeriStandFPGA.init fpga method before reading')
         else:
             read_tup = self.read_fifo_object.read(number_of_elements=self.read_packets, timeout_ms=timeout)
-            data = read_tup[0]
+            data = read_tup.data
             for i, u64 in enumerate(data):
-                poi = self.read_packet_list['packet{}'.format(i+1)]
-                read_vals = poi._unpack(u64)
+                this_packet = self.read_packet_list[i]
+                read_vals = this_packet._unpack(u64)
                 for key in read_vals:
                     self.channel_value_table[key] = read_vals[key]
 
@@ -126,12 +125,11 @@ class VeriStandFPGA(object):
             raise ConfigError('Session not initialized. Please first call the VeriStandFPGA.init_fpga method before writing')
         else:
             write_list = []
-            for i in range(1, self.write_packets + 1):
-                poi = self.write_packet_list['packet{}'.format(i)]
+            for current_packet in self.write_packet_list:
                 packet_vals = []
-                for j in range(poi.definition['channel_count']):
-                    packet_vals.append(self.channel_value_table[poi.definition['name{}'.format(j)]])
-                write_list.append(poi._pack(packet_vals))
+                for channel in current_packet:
+                    packet_vals.append(self.channel_value_table[channel['name']])
+                write_list.append(current_packet._pack(packet_vals))
             self.write_fifo_object.write(data=write_list, timeout_ms=timeout)
 
     def _create_packet(self, direction, index):
@@ -179,6 +177,16 @@ class Packet(object):
                 packet_def['FXPIWL{}'.format(i)] = packet[i][6].text
         self.definition = packet_def
 
+    def __iter__(self):
+        for i in range(self.definition['channel_count']):
+            channel = {}
+            channel['name'] = self.definition['name{}'.format(i)]
+            channel['data_type'] = self.definition['data_type{}'.format(i)]
+            if channel['data_type'] == 'FXPI32':
+                channel['FXPWL'] = self.definition['FXPWL{}'.format(i)]
+                channel['FXPIWL'] = self.definition['FXPIWL{}'.format(i)]
+            yield channel
+
     def _unpack(self, data):
         """
 
@@ -224,6 +232,7 @@ class Packet(object):
         datastr = ''
         for i in range(self.definition['channel_count']):
             if self.definition['data_type{}'.format(i)] == 'Boolean':
+                print('Boolean')
                 value = int(real_values[i])
                 if value:
                     bit = 1
@@ -232,12 +241,14 @@ class Packet(object):
                 datastr = datastr + (str(bit))
 
             elif self.definition['data_type{}'.format(i)] == 'PWM':
+                print('PWM')
                 dutycycle = int(real_values[0])
                 hitime = dutycycle
                 lowtime = 100-dutycycle
                 datastr = '{0:032b}'.format(lowtime) + '{0:032b}'.format(hitime)
 
             elif self.definition['data_type{}'.format(i)] == 'FXPI32':
+                print('FXPI32')
                 binstr = '0'
                 negstr = ''
                 value = float(real_values[i])
@@ -258,6 +269,9 @@ class Packet(object):
                 for j in range(32-int(self.definition['FXPWL{}'.format(i)])):
                     binstr = '0' + binstr
                 datastr = datastr + binstr
+            else:
+                raise PacketError(message='{} has an unsupported data type of {}'.format(
+                    self.definition['name{}'.format(i)], self.definition['data_type{}'.format(i)]), packetID=self.index)
         """
         Add padded 0's appropriately
         """

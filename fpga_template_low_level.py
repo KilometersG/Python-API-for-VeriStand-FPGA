@@ -11,10 +11,10 @@ read_packets = {}
 write_packets = {}
 
 for i in range(1, read_count):
-    read_packets['packet{}'.format(i)] = vsfpga.create_packet('read', i)
+    read_packets['packet{}'.format(i)] = vsfpga._create_packet('read', i)
 
 for i in range(1, write_count):
-    write_packets['packet{}'.format(i)] = vsfpga.create_packet('write', i)
+    write_packets['packet{}'.format(i)] = vsfpga._create_packet('write', i)
 
 print('Please input five values separated by commas for the following channels')
 print('Please enter PWMs as 0-100 Duty Cycles, Digital Lines as 1\'s or 0\'s and Analog Lines as floating points')
@@ -50,13 +50,13 @@ with Session(vsfpga.full_bitpath, device) as sesh:
         packed_reads["iteration{}".format(i)] = read_fifo.read(number_of_elements=vsfpga.read_packets, timeout_ms=2000)
         write_list = []
         for j in range(1, write_count):
-            poi = write_packets['packet{}'.format(j)]
+            packet_of_interest = write_packets['packet{}'.format(j)]
             p_values = []
             this_iteration = write_values['packet{}'.format(j)]
-            for k in range(poi.definition['channel_count']):
-                channel_name = poi.definition['name{}'.format(k)]
+            for k in range(packet_of_interest.definition['channel_count']):
+                channel_name = packet_of_interest.definition['name{}'.format(k)]
                 p_values.append(this_iteration['{},{}'.format(channel_name, i)])
-            packed_data = poi._pack(p_values)
+            packed_data = packet_of_interest._pack(p_values)
             write_list.append(packed_data)
         write_fifo.write(data=write_list, timeout_ms=2000)
 
@@ -65,8 +65,8 @@ with Session(vsfpga.full_bitpath, device) as sesh:
         read_tup = packed_reads['iteration{}'.format(i)]
         current_it = read_tup[0]
         for j, u64 in enumerate(current_it):
-            poi = read_packets['packet{}'.format(j+1)]
-            print(poi._unpack(u64))
+            packet_of_interest = read_packets['packet{}'.format(j+1)]
+            print(packet_of_interest._unpack(u64))
 
     sesh.close()
 
