@@ -2,11 +2,13 @@ import xml.etree.ElementTree as ET
 from nifpga import Session
 import ntpath
 
+
 class VeriStandError(Exception):
     """
     Base class for exceptions in this API
     """
     pass
+
 
 class ConfigError(VeriStandError):
     """
@@ -17,6 +19,7 @@ class ConfigError(VeriStandError):
     """
     def __init__(self, message):
         self.message = message
+
 
 class PacketError(VeriStandError):
     """
@@ -95,7 +98,7 @@ class VeriStandFPGA(object):
         self.fpga_ex_timing.write(False)
         self.fpga_irq.write(False)
 
-    def start_fpga(self):
+    def start_fpga_main_loop(self):
         self.fpga_start_control.write(True)
 
     def stop_fpga(self):
@@ -122,7 +125,8 @@ class VeriStandFPGA(object):
 
     def vs_write_fifo(self, timeout):
         if self.write_fifo_object is None:
-            raise ConfigError('Session not initialized. Please first call the VeriStandFPGA.init_fpga method before writing')
+            raise ConfigError('Session not initialized. '
+                              'Please first call the VeriStandFPGA.init_fpga method before writing')
         else:
             write_list = []
             for current_packet in self.write_packet_list:
@@ -167,14 +171,21 @@ class Packet(object):
             raise BaseException('direction must be either read or write')
 
         packet_def = {}
-        packet = fifo[self.index]
-        packet_def['channel_count'] = packet.__len__()
-        for i in range(packet_def['channel_count']):
-            packet_def['name{}'.format(i)] = packet[i][0].text
-            packet_def['data_type{}'.format(i)] = packet[i].tag
-            if packet_def['data_type{}'.format(i)] == 'FXPI32':
-                packet_def['FXPWL{}'.format(i)] = packet[i][5].text
-                packet_def['FXPIWL{}'.format(i)] = packet[i][6].text
+        packet_tag = fifo[self.index]
+        packet_def['channel_count'] = packet_tag.__len__()
+        for cindex, child in enumerate(packet_tag):
+            packet_def['data_type{}'.format(cindex)] = child.tag
+            for grandchild in child:
+                if grandchild.tag == 'Name':
+                    packet_def['name{}'.format(cindex)] = grandchild.text
+                elif grandchild.tag == 'Scale':
+                    packet_def['Scale{}'.format(cindex)] = int(grandchild.text)
+                elif grandchild.tag == 'FXPWL':
+                    packet_def['FXPWL{}'.format(cindex)] = int(grandchild.text)
+                elif grandchild.tag == 'FXPIWL':
+                    packet_def['FXPIWL{}'.format(cindex)] = int(grandchild.text)
+                else:
+                    continue
         self.definition = packet_def
 
     def __iter__(self):
@@ -185,6 +196,8 @@ class Packet(object):
             if channel['data_type'] == 'FXPI32':
                 channel['FXPWL'] = self.definition['FXPWL{}'.format(i)]
                 channel['FXPIWL'] = self.definition['FXPIWL{}'.format(i)]
+            elif channel['data_type'] == 'I16':
+                channel['Scale'] = self.definition['Scale{}'.format(i)]
             yield channel
 
     def _unpack(self, data):
@@ -202,9 +215,9 @@ class Packet(object):
                 nopad = chnldata[32 - int(self.definition['FXPWL{}'.format(i)]):int((i + 1) * 32)]
                 for index, char in enumerate(nopad):
                     if int(nopad[0]) != 0:
-                       if int(char) == 0:
-                           char = 1
-                       else:
+                        if int(char) == 0:
+                            char = 1
+                        else:
                             char = 0
                     powof = int(self.definition['FXPIWL{}'.format(i)]) - 1 - index
                     bitval = int(char) * 2 ** powof
@@ -221,6 +234,44 @@ class Packet(object):
                 bit = binstr[i]
                 real_values['{}'.format(self.definition['name{}'.format(i)])] = bool(bit)
 
+            elif self.definition['data_type{}'.format(i)] == 'I16':
+                analog_data_str = binstr[int(i*16):int((i+1)*16)]
+                analog_int = 0
+                if analog_data_str[15] == '1':
+                    for char in range(15):
+                        if analog_data_str[char] == '0':
+                            analog_int += 2**char
+                        elif analog_data_str[char] == '1':
+                            continue
+                        else:
+                            raise PacketError(message='{} has a non binary character in data string'.format(
+                                self.definition['name{}'.format(i)]), packetID=self.index)
+                    analog_int *= -1
+                    analog_int -= 1
+                elif analog_data_str[15] == '0':
+                    for char in range(15):
+                        if analog_data_str[char] == '1':
+                            analog_int += 2**char
+                        elif analog_data_str[char] == '0':
+                            continue
+                        else:
+                            raise PacketError(message='{} has a non binary character in data string'.format(
+                                self.definition['name{}'.format(i)]), packetID=self.index)
+                else:
+                    raise PacketError(message='{} has a non binary character in data string'.format(
+                        self.definition['name{}'.format(i)]), packetID=self.index)
+                analog_cal = 0
+                scale = self.definition['Scale{}'.format(i)]
+                if analog_int > 0:
+                    analog_cal = (scale * analog_int)/32767
+                elif analog_int < 0:
+                    analog_cal = (-1 * scale * analog_int)/-32768
+                real_values['{}'.format(self.definition['name{}'.format(i)])] = analog_cal
+
+            else:
+                raise PacketError(message='{} has an unsupported data type of {}'.format(
+                    self.definition['name{}'.format(i)], self.definition['data_type{}'.format(i)]), packetID=self.index)
+
         return real_values
 
     def _pack(self, real_values):
@@ -232,7 +283,6 @@ class Packet(object):
         datastr = ''
         for i in range(self.definition['channel_count']):
             if self.definition['data_type{}'.format(i)] == 'Boolean':
-                print('Boolean')
                 value = int(real_values[i])
                 if value:
                     bit = 1
@@ -241,14 +291,12 @@ class Packet(object):
                 datastr = datastr + (str(bit))
 
             elif self.definition['data_type{}'.format(i)] == 'PWM':
-                print('PWM')
                 dutycycle = int(real_values[0])
                 hitime = dutycycle
                 lowtime = 100-dutycycle
                 datastr = '{0:032b}'.format(lowtime) + '{0:032b}'.format(hitime)
 
             elif self.definition['data_type{}'.format(i)] == 'FXPI32':
-                print('FXPI32')
                 binstr = '0'
                 negstr = ''
                 value = float(real_values[i])
@@ -258,7 +306,7 @@ class Packet(object):
                         binstr = binstr + '1'
                         value = check
                     else:
-                        binstr + binstr + '0'
+                        binstr = binstr + '0'
                 if int(real_values[i]) < 0:
                     for char in datastr:
                         if char == '0':
@@ -269,11 +317,36 @@ class Packet(object):
                 for j in range(32-int(self.definition['FXPWL{}'.format(i)])):
                     binstr = '0' + binstr
                 datastr = datastr + binstr
+
+            elif self.definition['data_type{}'.format(i)] == 'I16':
+                calibrated_value = real_values[i]
+                raw_value = 0
+                if calibrated_value > 0:
+                    raw_value = int(round((32767 * calibrated_value)/10))
+                elif calibrated_value < 0:
+                    raw_value = int(round((-32768 * calibrated_value)/-10))
+                if raw_value >= 0:
+                    binstr = '0'
+                    for bit in range(15):
+                        bitcheck = int(raw_value - 2 ** (14-bit))
+                        if bitcheck >= 0:
+                            binstr += '1'
+                            raw_value = bitcheck
+                        else:
+                            binstr += '0'
+                else:
+                    binstr = '1'
+                    for bit in range(15):
+                        bitcheck = int(raw_value + 2 ** (14-bit))
+                        if bitcheck < 0:
+                            binstr += '0'
+                            raw_value = bitcheck
+                        else:
+                            binstr += '1'
+                datastr += binstr
+
             else:
                 raise PacketError(message='{} has an unsupported data type of {}'.format(
                     self.definition['name{}'.format(i)], self.definition['data_type{}'.format(i)]), packetID=self.index)
-        """
-        Add padded 0's appropriately
-        """
         packed_data = int(datastr, 2)
-        return(packed_data)
+        return packed_data

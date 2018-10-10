@@ -23,7 +23,7 @@ while True:
     else:
         break
 
-vsfpga.start_fpga()
+vsfpga.start_fpga_main_loop()
 
 for i in range(5):
     vsfpga.vs_read_fifo(timeout=2000)
