@@ -26,7 +26,8 @@ while True:
 vsfpga.start_fpga_main_loop()
 
 for i in range(5):
-    vsfpga.vs_read_fifo(timeout=2000)
+    print(vsfpga.read_packets)
+    vsfpga.vs_read_fifo(timeout=5000)
     print('Iteration {} values are: '.format(i))
     for current_read_packet in vsfpga.read_packet_list:
         for read_channel in current_read_packet:

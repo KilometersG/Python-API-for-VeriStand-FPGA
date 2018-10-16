@@ -74,14 +74,14 @@ class VeriStandFPGA(object):
         self.read_packet_list = []
         self.write_packet_list = []
         self.channel_value_table = {}
-        for i in range(self.read_packets):
-            self.read_packet_list.append(self._create_packet('read', i))
-            for j in range(self.read_packet_list[i].definition['channel_count']):
-                self.channel_value_table[self.read_packet_list[i].definition['name{}'.format(j)]] = 0
-        for i in range(self.write_packets):
-            self.write_packet_list.append(self._create_packet('write', i))
-            for j in range(self.write_packet_list[i].definition['channel_count']):
-                self.channel_value_table[self.write_packet_list[i].definition['name{}'.format(j)]] = 0
+        for pack_index in range(self.read_packets):
+            self.read_packet_list.append(self._create_packet('read', pack_index + 1))
+            for chan_index in range(self.read_packet_list[pack_index].definition['channel_count']):
+                self.channel_value_table[self.read_packet_list[pack_index].definition['name{}'.format(chan_index)]] = 0
+        for pack_index in range(self.write_packets):
+            self.write_packet_list.append(self._create_packet('write', pack_index + 1))
+            for chan_index in range(self.write_packet_list[pack_index].definition['channel_count']):
+                self.channel_value_table[self.write_packet_list[pack_index].definition['name{}'.format(chan_index)]] = 0
 
     def init_fpga(self, device, loop_rate):
         self.session = Session(self.full_bitpath, device)
@@ -143,12 +143,23 @@ class VeriStandFPGA(object):
         :param index:
         :return:
         """
-        this_packet = Packet(self, direction, index)
+        if index == 1 and direction.lower() == 'read':
+            this_packet = FirstReadPacket()
+        else:
+            this_packet = Packet(self, direction, index)
         return this_packet
+
+    def __del__(self):
+        try:
+            self.stop_fpga()
+        except:
+            print('Configuration closed')
+        print('FPGA hardware session closed.')
+        print('{} configuration closed'.format(self.bitfile))
 
 
 class Packet(object):
-    def __init__(self, config, direction, index=1):
+    def __init__(self, config, direction, index):
         """
         Generate an object that defines a packet in a DMA FIFO
         The object will have the following attributes: channel_count, name(0-x), description(0-x), and
@@ -225,22 +236,22 @@ class Packet(object):
                 real_values['{}'.format(self.definition['name{}'.format(i)])] = chnlunpck
 
             elif self.definition['data_type{}'.format(i)] == 'PWM':
-                lowtime = int(binstr[:32])
-                hitime = int(binstr[32:])
+                hitime = int(binstr[:32])
+                lowtime = int(binstr[32:])
                 dutycycle = hitime/(hitime+lowtime)
                 real_values['{}'.format(self.definition['name{}'.format(i)])] = dutycycle
 
             elif self.definition['data_type{}'.format(i)] == 'Boolean':
-                bit = binstr[i]
+                bit = int(binstr[i])
                 real_values['{}'.format(self.definition['name{}'.format(i)])] = bool(bit)
 
             elif self.definition['data_type{}'.format(i)] == 'I16':
-                analog_data_str = binstr[int(i*16):int((i+1)*16)]
+                analog_data_str = binstr[int((3-i)*16):int((4-i)*16)]
                 analog_int = 0
-                if analog_data_str[15] == '1':
+                if analog_data_str[0] == '1':
                     for char in range(15):
                         if analog_data_str[char] == '0':
-                            analog_int += 2**char
+                            analog_int += 2**(14-char)
                         elif analog_data_str[char] == '1':
                             continue
                         else:
@@ -248,10 +259,10 @@ class Packet(object):
                                 self.definition['name{}'.format(i)]), packetID=self.index)
                     analog_int *= -1
                     analog_int -= 1
-                elif analog_data_str[15] == '0':
+                elif analog_data_str[0] == '0':
                     for char in range(15):
                         if analog_data_str[char] == '1':
-                            analog_int += 2**char
+                            analog_int += 2**(14-char)
                         elif analog_data_str[char] == '0':
                             continue
                         else:
@@ -319,7 +330,7 @@ class Packet(object):
                 datastr = datastr + binstr
 
             elif self.definition['data_type{}'.format(i)] == 'I16':
-                calibrated_value = real_values[i]
+                calibrated_value = float(real_values[i])
                 raw_value = 0
                 if calibrated_value > 0:
                     raw_value = int(round((32767 * calibrated_value)/10))
@@ -343,10 +354,23 @@ class Packet(object):
                             raw_value = bitcheck
                         else:
                             binstr += '1'
-                datastr += binstr
+                datastr = binstr + datastr
 
             else:
                 raise PacketError(message='{} has an unsupported data type of {}'.format(
                     self.definition['name{}'.format(i)], self.definition['data_type{}'.format(i)]), packetID=self.index)
         packed_data = int(datastr, 2)
         return packed_data
+
+class FirstReadPacket(Packet):
+    """
+
+    First Packet of the read FIFO is a nonstandard Boolean. This subclass accounts for that.
+    """
+
+    def __init__(self):
+        self.definition = {}
+        self.definition['channel_count'] = 1
+        self.definition['name0'] = 'Is Late?'
+        self.definition['data_type0'] = 'Boolean'
+

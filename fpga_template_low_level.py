@@ -67,7 +67,7 @@ with Session(vsfpga.full_bitpath, device) as sesh:
         for j, u64 in enumerate(current_it):
             packet_of_interest = read_packets['packet{}'.format(j+1)]
             print(packet_of_interest._unpack(u64))
-
+            print("{0:064b}".format(u64))
     sesh.close()
 
 # Assumptions:
@@ -80,8 +80,4 @@ with Session(vsfpga.full_bitpath, device) as sesh:
 #       Digital Lines not Ports
 #       Pulse Measurement VI
 #       Pulse Generation VI
-#       Analog IO is FXP not integer
-# Known Issues
-#   FXP Unpack reports incorrect values
-#   Adding error handling in general
-#
+#       Analog IO
