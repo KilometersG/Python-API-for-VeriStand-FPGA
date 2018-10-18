@@ -242,7 +242,7 @@ class Packet(object):
                 real_values['{}'.format(self.definition['name{}'.format(i)])] = dutycycle
 
             elif self.definition['data_type{}'.format(i)] == 'Boolean':
-                bit = int(binstr[i])
+                bit = int(binstr[63-i])
                 real_values['{}'.format(self.definition['name{}'.format(i)])] = bool(bit)
 
             elif self.definition['data_type{}'.format(i)] == 'I16':
@@ -250,20 +250,18 @@ class Packet(object):
                 analog_int = 0
                 if analog_data_str[0] == '1':
                     for char in range(15):
-                        if analog_data_str[char] == '0':
+                        if analog_data_str[char+1] == '0':
                             analog_int += 2**(14-char)
-                        elif analog_data_str[char] == '1':
-                            continue
-                        else:
+                        elif analog_data_str[char+1] != '1':
                             raise PacketError(message='{} has a non binary character in data string'.format(
                                 self.definition['name{}'.format(i)]), packetID=self.index)
                     analog_int *= -1
                     analog_int -= 1
                 elif analog_data_str[0] == '0':
                     for char in range(15):
-                        if analog_data_str[char] == '1':
+                        if analog_data_str[char+1] == '1':
                             analog_int += 2**(14-char)
-                        elif analog_data_str[char] == '0':
+                        elif analog_data_str[char+1] == '0':
                             continue
                         else:
                             raise PacketError(message='{} has a non binary character in data string'.format(
@@ -299,7 +297,7 @@ class Packet(object):
                     bit = 1
                 else:
                     bit = 0
-                datastr = datastr + (str(bit))
+                datastr = (str(bit)) + datastr
 
             elif self.definition['data_type{}'.format(i)] == 'PWM':
                 dutycycle = int(real_values[0])
@@ -327,7 +325,7 @@ class Packet(object):
                     binstr = negstr
                 for j in range(32-int(self.definition['FXPWL{}'.format(i)])):
                     binstr = '0' + binstr
-                datastr = datastr + binstr
+                datastr = binstr + datastr
 
             elif self.definition['data_type{}'.format(i)] == 'I16':
                 calibrated_value = float(real_values[i])

@@ -12,7 +12,10 @@ for write_packet in vsfpga.write_packet_list:
         valuestr = input('{}: '.format(channel['name']))
         channel_values = valuestr.split(',')
         for k, value in enumerate(channel_values):
-            iteration_writes['{},{}'.format(channel['name'], k)] = int(value)
+            if channel['data_type'] == 'Boolean':
+                iteration_writes['{},{}'.format(channel['name'], k)] = int(value)
+            else:
+                iteration_writes['{},{}'.format(channel['name'], k)] = float(value)
 
 while True:
     loop_rate = input("Please enter desired FPGA loop rate in ms: ")
