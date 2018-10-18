@@ -195,6 +195,8 @@ class Packet(object):
                     packet_def['FXPWL{}'.format(cindex)] = int(grandchild.text)
                 elif grandchild.tag == 'FXPIWL':
                     packet_def['FXPIWL{}'.format(cindex)] = int(grandchild.text)
+                elif grandchild.tag == 'PWMPeriod':  # PWM period is measured in ticks of the FPGA clock
+                    packet_def['PWM_period{}'.format(cindex)] = int(grandchild.text)
                 else:
                     continue
         self.definition = packet_def
@@ -236,9 +238,9 @@ class Packet(object):
                 real_values['{}'.format(self.definition['name{}'.format(i)])] = chnlunpck
 
             elif self.definition['data_type{}'.format(i)] == 'PWM':
-                hitime = int(binstr[:32])
-                lowtime = int(binstr[32:])
-                dutycycle = hitime/(hitime+lowtime)
+                hitime = int(binstr[:32], 2)
+                lowtime = int(binstr[32:], 2)
+                dutycycle = (hitime/(hitime+lowtime))*100
                 real_values['{}'.format(self.definition['name{}'.format(i)])] = dutycycle
 
             elif self.definition['data_type{}'.format(i)] == 'Boolean':
@@ -301,9 +303,9 @@ class Packet(object):
 
             elif self.definition['data_type{}'.format(i)] == 'PWM':
                 dutycycle = int(real_values[0])
-                hitime = dutycycle
-                lowtime = 100-dutycycle
-                datastr = '{0:032b}'.format(lowtime) + '{0:032b}'.format(hitime)
+                hi_time = int(round((dutycycle/100) * self.definition['PWM_period{}'.format(i)]))
+                low_time = self.definition['PWM_period{}'.format(i)] - hi_time
+                datastr = '{0:032b}'.format(hi_time) + '{0:032b}'.format(low_time)
 
             elif self.definition['data_type{}'.format(i)] == 'FXPI32':
                 binstr = '0'
