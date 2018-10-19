@@ -67,7 +67,6 @@ with Session(vsfpga.full_bitpath, device) as sesh:
         for j, u64 in enumerate(current_it):
             packet_of_interest = read_packets['packet{}'.format(j+1)]
             print(packet_of_interest._unpack(u64))
-            print("{0:064b}".format(u64))
     sesh.close()
 
 # Assumptions:
