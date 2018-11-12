@@ -18,14 +18,14 @@ for write_packet in vsfpga.write_packet_list:
                 iteration_writes['{},{}'.format(channel['name'], k)] = float(value)
 
 while True:
-    loop_rate = input("Please enter desired FPGA loop rate in ms: ")
     try:
-        vsfpga.init_fpga(device, int(loop_rate))
+        loop_rate = int(input("Please enter desired FPGA loop rate in ms: "))
     except ValueError:
         print('FPGA loop rate must be an integer')
     else:
         break
 
+vsfpga.init_fpga(device, loop_rate)
 vsfpga.start_fpga_main_loop()
 
 for i in range(5):

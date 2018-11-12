@@ -84,7 +84,10 @@ class VeriStandFPGA(object):
                 self.channel_value_table[self.write_packet_list[pack_index].definition['name{}'.format(chan_index)]] = 0
 
     def init_fpga(self, device, loop_rate):
-        self.session = Session(self.full_bitpath, device)
+        self.session = Session(self.full_bitpath, device, reset_if_last_session_on_exit=True)
+        self.session.download()
+        self.session.run()
+        print(self.session.fpga_vi_state)
         self.write_fifo_object = self.session.fifos['DMA_WRITE']
         self.read_fifo_object = self.session.fifos['DMA_READ']
         self.loop_timer = self.session.registers['Loop Rate (usec)']
@@ -102,7 +105,9 @@ class VeriStandFPGA(object):
         self.fpga_start_control.write(True)
 
     def stop_fpga(self):
+        self.session.reset
         self.session.close()
+
 
     def set_channel(self, channel_name, value):
         self.channel_value_table[channel_name] = value
