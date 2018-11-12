@@ -105,7 +105,7 @@ class VeriStandFPGA(object):
         self.fpga_start_control.write(True)
 
     def stop_fpga(self):
-        self.session.reset
+        self.session.reset()
         self.session.close()
 
 
