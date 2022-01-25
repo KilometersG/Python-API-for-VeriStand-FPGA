@@ -5,7 +5,7 @@ This Python API is meant to work with NI-RIO FPGA bitfiles, .lvbitx, and their a
 This API was developed and tested with Python 3.6
 
 ### Quality, Limitations
-This IP is under active development. The master branch should be runnable, but any other branches may not be functional. Check the issues list before using this code.
+This IP is no longer under active development. The master branch should be runnable, but any other branches may not be functional. Check the issues list before using this code.
 
 ### Dependencies
 nifpga
